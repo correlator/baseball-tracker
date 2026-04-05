@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Baseball Tracker</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+  <style>
+    :root {
+      --bg: #0f1117;
+      --surface: #1a1d27;
+      --surface2: #242836;
+      --accent: #4f8cff;
+      --accent2: #ff6b4f;
+      --green: #34d399;
+      --yellow: #fbbf24;
+      --red: #f87171;
+      --text: #e8eaed;
+      --text2: #9ca3af;
+      --radius: 14px;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .screen { display: none; padding: 16px; padding-bottom: 100px; }
+    .screen.active { display: block; }
+
+    /* --- Nav Bar --- */
+    .nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: var(--surface);
+      display: flex; justify-content: space-around;
+      padding: 8px 0 max(8px, env(safe-area-inset-bottom));
+      border-top: 1px solid var(--surface2);
+      z-index: 100;
+    }
+    .nav button {
+      background: none; border: none; color: var(--text2);
+      font-size: 11px; display: flex; flex-direction: column;
+      align-items: center; gap: 4px; padding: 4px 12px;
+      cursor: pointer; transition: color 0.2s;
+    }
+    .nav button.active { color: var(--accent); }
+    .nav button svg { width: 24px; height: 24px; }
+
+    /* --- Buttons --- */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 14px 24px; border-radius: var(--radius); border: none;
+      font-size: 16px; font-weight: 600; cursor: pointer;
+      transition: transform 0.1s, opacity 0.2s;
+      -webkit-user-select: none; user-select: none;
+    }
+    .btn:active { transform: scale(0.96); }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-danger { background: var(--red); color: #fff; }
+    .btn-success { background: var(--green); color: #000; }
+    .btn-outline {
+      background: transparent; border: 2px solid var(--surface2);
+      color: var(--text);
+    }
+    .btn-lg { padding: 18px 32px; font-size: 18px; width: 100%; }
+    .btn-sm { padding: 10px 16px; font-size: 14px; }
+
+    /* --- Cards --- */
+    .card {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 16px; margin-bottom: 12px;
+    }
+
+    /* --- Inputs --- */
+    .input-group { margin-bottom: 16px; }
+    .input-group label {
+      display: block; font-size: 13px; color: var(--text2);
+      margin-bottom: 6px; font-weight: 500;
+    }
+    input[type="number"], input[type="text"], input[type="date"], select {
+      width: 100%; padding: 14px 16px; border-radius: var(--radius);
+      border: 2px solid var(--surface2); background: var(--surface);
+      color: var(--text); font-size: 18px; outline: none;
+      -webkit-appearance: none;
+    }
+    input:focus, select:focus { border-color: var(--accent); }
+
+    /* --- Quick Buttons Row --- */
+    .quick-row {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+      margin-bottom: 16px;
+    }
+    .quick-btn {
+      padding: 20px 8px; border-radius: var(--radius); border: none;
+      font-size: 16px; font-weight: 700; cursor: pointer;
+      transition: transform 0.1s;
+      -webkit-user-select: none; user-select: none;
+    }
+    .quick-btn:active { transform: scale(0.93); }
+    .quick-btn.ball { background: var(--accent); color: #fff; }
+    .quick-btn.strike { background: var(--yellow); color: #000; }
+    .quick-btn.hit { background: var(--green); color: #000; }
+    .quick-btn.out { background: var(--red); color: #fff; }
+    .quick-btn.foul { background: var(--surface2); color: var(--text); }
+    .quick-btn.miss { background: #6b21a8; color: #fff; }
+
+    /* --- Header --- */
+    h1 { font-size: 28px; margin-bottom: 4px; }
+    h2 { font-size: 22px; margin-bottom: 16px; }
+    h3 { font-size: 16px; color: var(--text2); margin-bottom: 12px; }
+    .subtitle { color: var(--text2); font-size: 14px; margin-bottom: 20px; }
+
+    /* --- Session live stats --- */
+    .live-stats {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+      margin-bottom: 16px;
+    }
+    .stat-box {
+      background: var(--surface2); border-radius: 10px;
+      padding: 12px 8px; text-align: center;
+    }
+    .stat-box .value { font-size: 24px; font-weight: 700; }
+    .stat-box .label { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+    /* --- Stats page --- */
+    .stat-card {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 16px; margin-bottom: 12px;
+    }
+    .stat-card .row {
+      display: flex; justify-content: space-between;
+      padding: 8px 0; border-bottom: 1px solid var(--surface2);
+    }
+    .stat-card .row:last-child { border-bottom: none; }
+    .stat-card .row .lbl { color: var(--text2); }
+    .stat-card .row .val { font-weight: 600; }
+
+    /* --- Tabs --- */
+    .tabs {
+      display: flex; gap: 8px; margin-bottom: 20px;
+    }
+    .tab {
+      flex: 1; padding: 12px; border-radius: var(--radius); border: none;
+      background: var(--surface2); color: var(--text2);
+      font-size: 14px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tab.active { background: var(--accent); color: #fff; }
+
+    /* --- Session list item --- */
+    .session-item {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 14px 16px; margin-bottom: 10px;
+      display: flex; justify-content: space-between; align-items: center;
+      cursor: pointer; transition: background 0.2s;
+    }
+    .session-item:active { background: var(--surface2); }
+    .session-item .info { flex: 1; }
+    .session-item .type-badge {
+      display: inline-block; padding: 3px 8px; border-radius: 6px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      margin-bottom: 4px;
+    }
+    .type-pitching { background: var(--accent); color: #fff; }
+    .type-batting { background: var(--green); color: #000; }
+    .type-both { background: var(--yellow); color: #000; }
+    .session-item .date { color: var(--text2); font-size: 13px; }
+    .session-item .counts { color: var(--text2); font-size: 13px; }
+    .session-item .arrow { color: var(--text2); font-size: 20px; }
+
+    /* --- Charts --- */
+    .chart-container {
+      background: var(--surface); border-radius: var(--radius);
+      padding: 16px; margin-bottom: 16px;
+    }
+    .chart-container h3 { margin-bottom: 8px; }
+
+    /* --- Undo bar --- */
+    .undo-bar {
+      position: fixed; bottom: 70px; left: 16px; right: 16px;
+      background: var(--surface2); border-radius: var(--radius);
+      padding: 10px 16px; display: flex; justify-content: space-between;
+      align-items: center; z-index: 99;
+    }
+    .undo-bar.hidden { display: none; }
+
+    .empty-state {
+      text-align: center; padding: 60px 20px; color: var(--text2);
+    }
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+
+    /* --- Speed input with quick presets --- */
+    .speed-presets {
+      display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap;
+    }
+    .speed-preset {
+      padding: 8px 14px; border-radius: 8px; border: none;
+      background: var(--surface2); color: var(--text); font-size: 14px;
+      cursor: pointer; font-weight: 500;
+    }
+    .speed-preset:active { background: var(--accent); color: #fff; }
+
+    .back-btn {
+      background: none; border: none; color: var(--accent);
+      font-size: 16px; cursor: pointer; padding: 8px 0;
+      margin-bottom: 12px; display: flex; align-items: center; gap: 4px;
+    }
+
+    /* --- Speed Cam --- */
+    #speed-cam { padding: 0; padding-bottom: 0; }
+    #speed-cam.active { display: flex; flex-direction: column; height: 100dvh; }
+    .cam-header {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 12px 16px; background: var(--surface); z-index: 10;
+    }
+    .cam-viewport {
+      position: relative; flex: 1; overflow: hidden; background: #000;
+      touch-action: none;
+    }
+    .cam-viewport video {
+      width: 100%; height: 100%; object-fit: cover;
+    }
+    .cam-viewport canvas {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+    }
+    #cam-zone-overlay { pointer-events: auto; }
+    .cam-speed-display {
+      position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
+      background: rgba(0,0,0,0.75); border-radius: 12px;
+      padding: 8px 20px; text-align: center; z-index: 5;
+    }
+    .cam-speed-display .speed-val {
+      font-size: 48px; font-weight: 800; color: var(--green); line-height: 1;
+    }
+    .cam-speed-display .speed-label { font-size: 13px; color: var(--text2); }
+    .cam-speed-display.waiting .speed-val { color: var(--text2); }
+    .cam-bottom {
+      padding: 12px 16px; background: var(--surface);
+      padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+    .cam-status {
+      text-align: center; font-size: 13px; color: var(--text2); margin-bottom: 8px;
+    }
+    .cam-status.detecting { color: var(--green); }
+    .cam-log-row {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    }
+    .cam-settings { padding: 16px; overflow-y: auto; }
+    .sensitivity-row {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 16px;
+    }
+    .sensitivity-row input[type="range"] { flex: 1; accent-color: var(--accent); }
+    .calibration-entry {
+      display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+    }
+    .calibration-entry .computed { color: var(--text2); font-size: 14px; min-width: 80px; }
+    .calibration-entry input { width: 80px; font-size: 16px; padding: 8px; }
+  </style>
+</head>
+<body>
+
+<!-- ========== HOME SCREEN ========== -->
+<div id="home" class="screen active">
+  <h1>Baseball Tracker</h1>
+  <p class="subtitle">Track your pitching & batting stats</p>
+
+  <button class="btn btn-primary btn-lg" onclick="showNewSession()" style="margin-bottom: 16px;">
+    + New Session
+  </button>
+
+  <h3>Recent Sessions</h3>
+  <div id="session-list"></div>
+</div>
+
+<!-- ========== NEW SESSION SCREEN ========== -->
+<div id="new-session" class="screen">
+  <button class="back-btn" onclick="showScreen('home')">&#8592; Back</button>
+  <h2>New Session</h2>
+
+  <div class="input-group">
+    <label>Session Type</label>
+    <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:10px;">
+      <button class="btn btn-outline session-type-btn" data-type="pitching" onclick="selectType('pitching')">Pitching</button>
+      <button class="btn btn-outline session-type-btn" data-type="batting" onclick="selectType('batting')">Batting</button>
+      <button class="btn btn-outline session-type-btn" data-type="both" onclick="selectType('both')">Both</button>
+    </div>
+  </div>
+
+  <div class="input-group">
+    <label>Label (optional)</label>
+    <input type="text" id="session-label" placeholder="e.g. Morning practice">
+  </div>
+
+  <div class="input-group">
+    <label>Date</label>
+    <input type="date" id="session-date">
+  </div>
+
+  <button class="btn btn-success btn-lg" id="start-btn" onclick="startSession()" disabled>
+    Start Session
+  </button>
+</div>
+
+<!-- ========== LIVE SESSION SCREEN ========== -->
+<div id="live-session" class="screen">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+    <div>
+      <h2 id="live-title" style="margin-bottom:4px;"></h2>
+      <span id="live-type-badge" class="type-badge"></span>
+    </div>
+    <button class="btn btn-sm btn-danger" onclick="endSession()">End</button>
+  </div>
+
+  <!-- Pitching Section -->
+  <div id="pitch-section" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+      <h3 style="margin-bottom:0;">Pitching</h3>
+      <button class="btn btn-sm btn-primary" onclick="openSpeedCam()" style="font-size:13px;padding:8px 14px;">Speed Cam</button>
+    </div>
+    <div class="live-stats" id="pitch-live-stats"></div>
+
+    <div class="input-group">
+      <label>Pitch Speed (mph)</label>
+      <input type="number" id="pitch-speed" placeholder="e.g. 85" inputmode="decimal" min="0" max="120">
+      <div class="speed-presets">
+        <button class="speed-preset" onclick="setSpeed(70)">70</button>
+        <button class="speed-preset" onclick="setSpeed(75)">75</button>
+        <button class="speed-preset" onclick="setSpeed(80)">80</button>
+        <button class="speed-preset" onclick="setSpeed(85)">85</button>
+        <button class="speed-preset" onclick="setSpeed(90)">90</button>
+        <button class="speed-preset" onclick="setSpeed(95)">95</button>
+      </div>
+    </div>
+
+    <div class="quick-row">
+      <button class="quick-btn ball" onclick="logPitch('ball')">BALL</button>
+      <button class="quick-btn strike" onclick="logPitch('strike')">STRIKE</button>
+      <button class="quick-btn hit" onclick="logPitch('hit')">HIT</button>
+    </div>
+  </div>
+
+  <!-- Batting Section -->
+  <div id="bat-section" style="display:none;">
+    <h3>Batting</h3>
+    <div class="live-stats" id="bat-live-stats"></div>
+
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:16px;">
+      <div class="input-group" style="margin-bottom:0;">
+        <label>Exit Velo (mph)</label>
+        <input type="number" id="exit-velo" placeholder="e.g. 95" inputmode="decimal" min="0" max="130">
+      </div>
+      <div class="input-group" style="margin-bottom:0;">
+        <label>Distance (ft)</label>
+        <input type="number" id="bat-distance" placeholder="e.g. 350" inputmode="decimal" min="0" max="600">
+      </div>
+    </div>
+
+    <div class="quick-row" style="grid-template-columns: repeat(4,1fr);">
+      <button class="quick-btn hit" onclick="logAtBat('hit')">HIT</button>
+      <button class="quick-btn out" onclick="logAtBat('out')">OUT</button>
+      <button class="quick-btn foul" onclick="logAtBat('foul')">FOUL</button>
+      <button class="quick-btn miss" onclick="logAtBat('miss')">MISS</button>
+    </div>
+  </div>
+
+  <!-- Undo Bar -->
+  <div id="undo-bar" class="undo-bar hidden">
+    <span id="undo-text"></span>
+    <button class="btn btn-sm btn-outline" onclick="undoLast()">Undo</button>
+  </div>
+</div>
+
+<!-- ========== SESSION DETAIL SCREEN ========== -->
+<div id="session-detail" class="screen">
+  <button class="back-btn" onclick="showScreen('home')">&#8592; Back</button>
+  <h2 id="detail-title"></h2>
+  <div id="detail-content"></div>
+</div>
+
+<!-- ========== STATS SCREEN ========== -->
+<div id="stats" class="screen">
+  <h1 style="margin-bottom:16px;">Stats</h1>
+  <div class="tabs">
+    <button class="tab active" onclick="showStatsTab('pitching', this)">Pitching</button>
+    <button class="tab" onclick="showStatsTab('batting', this)">Batting</button>
+  </div>
+  <div id="stats-content"></div>
+</div>
+
+<!-- ========== SPEED CAM SCREEN ========== -->
+<div id="speed-cam" class="screen">
+  <div class="cam-header">
+    <button class="back-btn" style="margin:0;" onclick="exitSpeedCam()">&#8592; Back</button>
+    <span style="font-weight:600;">Speed Cam</span>
+    <button class="btn btn-sm btn-outline" onclick="toggleCamSettings()">Setup</button>
+  </div>
+  <div class="cam-viewport" id="cam-viewport">
+    <video id="cam-video" autoplay playsinline muted></video>
+    <canvas id="cam-zone-overlay"></canvas>
+    <canvas id="cam-analysis" style="display:none;"></canvas>
+    <div class="cam-speed-display waiting" id="cam-speed-display">
+      <div class="speed-val" id="cam-speed-val">--</div>
+      <div class="speed-label">mph</div>
+    </div>
+  </div>
+  <div class="cam-settings" id="cam-settings" style="display:none;">
+    <div class="input-group">
+      <label>Distance: Mound to Plate (ft)</label>
+      <input type="number" id="cam-distance" value="60.5" inputmode="decimal" min="10" max="100" step="0.5">
+    </div>
+    <div class="input-group">
+      <label>Motion Sensitivity</label>
+      <div class="sensitivity-row">
+        <span style="font-size:12px;color:var(--text2);">Low</span>
+        <input type="range" id="cam-motion-sens" min="5" max="80" value="30">
+        <span style="font-size:12px;color:var(--text2);">High</span>
+      </div>
+    </div>
+    <div class="input-group">
+      <label>Audio Sensitivity (Glove Pop)</label>
+      <div class="sensitivity-row">
+        <span style="font-size:12px;color:var(--text2);">Low</span>
+        <input type="range" id="cam-audio-sens" min="5" max="95" value="50">
+        <span style="font-size:12px;color:var(--text2);">High</span>
+      </div>
+    </div>
+    <h3 style="margin-bottom:8px;">Detection Zones</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">
+      Tap "Draw Zones" then drag on the camera to draw two boxes:<br>
+      1st box = Pitcher area &nbsp; 2nd box = Catcher area
+    </p>
+    <div style="display:flex; gap:10px; margin-bottom:16px;">
+      <button class="btn btn-sm btn-primary" onclick="startZoneDraw()">Draw Zones</button>
+      <button class="btn btn-sm btn-outline" onclick="clearZones()">Reset Zones</button>
+    </div>
+    <h3 style="margin-bottom:8px;">Calibration</h3>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">
+      Throw pitches with a radar gun. Enter the radar reading next to each computed speed to calibrate.
+    </p>
+    <div id="calibration-list"></div>
+    <div style="display:flex; gap:10px; margin-bottom:12px;">
+      <button class="btn btn-sm btn-primary" onclick="startCalibration()">Start Calibrating</button>
+      <button class="btn btn-sm btn-outline" onclick="clearCalibration()">Clear</button>
+    </div>
+    <div id="calibration-status" style="font-size:13px;color:var(--text2);"></div>
+    <button class="btn btn-success btn-lg" style="margin-top:12px;" onclick="toggleCamSettings()">Done</button>
+  </div>
+  <div class="cam-bottom" id="cam-bottom">
+    <div class="cam-status" id="cam-status">Draw zones in Setup to start detecting</div>
+    <div class="cam-log-row">
+      <button class="quick-btn ball" onclick="logPitchFromCam('ball')">BALL</button>
+      <button class="quick-btn strike" onclick="logPitchFromCam('strike')">STRIKE</button>
+      <button class="quick-btn hit" onclick="logPitchFromCam('hit')">HIT</button>
+    </div>
+  </div>
+</div>
+
+<!-- ========== BOTTOM NAV ========== -->
+<div class="nav">
+  <button class="active" onclick="navigate('home', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9M5 10v10a1 1 0 001 1h3a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1h3a1 1 0 001-1V10"/></svg>
+    Home
+  </button>
+  <button onclick="navigate('stats', this)">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
+    Stats
+  </button>
+</div>
+
+<script>
+// ============ LOCAL STORAGE DATABASE ============
+const DB = {
+  _get(key) { return JSON.parse(localStorage.getItem(key) || '[]'); },
+  _set(key, val) { localStorage.setItem(key, JSON.stringify(val)); },
+  _nextId(key) {
+    const n = parseInt(localStorage.getItem(key + '_seq') || '0') + 1;
+    localStorage.setItem(key + '_seq', n);
+    return n;
+  },
+
+  // Sessions
+  getSessions() {
+    return this._get('sessions').sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
+  },
+  getSession(id) {
+    return this._get('sessions').find(s => s.id === id);
+  },
+  createSession(type, label, date) {
+    const sessions = this._get('sessions');
+    const s = { id: this._nextId('sessions'), type, label: label || null, date, pitches: [], at_bats: [], created_at: new Date().toISOString() };
+    sessions.push(s);
+    this._set('sessions', sessions);
+    return s;
+  },
+  deleteSession(id) {
+    this._set('sessions', this._get('sessions').filter(s => s.id !== id));
+  },
+  _updateSession(id, fn) {
+    const sessions = this._get('sessions');
+    const idx = sessions.findIndex(s => s.id === id);
+    if (idx === -1) return;
+    fn(sessions[idx]);
+    this._set('sessions', sessions);
+    return sessions[idx];
+  },
+
+  // Pitches
+  addPitch(sessionId, speed, result) {
+    return this._updateSession(sessionId, s => {
+      s.pitches.push({ id: Date.now(), speed, result, created_at: new Date().toISOString() });
+    });
+  },
+  removeLastPitch(sessionId) {
+    this._updateSession(sessionId, s => s.pitches.pop());
+  },
+
+  // At-bats
+  addAtBat(sessionId, exit_velocity, distance, result) {
+    return this._updateSession(sessionId, s => {
+      s.at_bats.push({ id: Date.now(), exit_velocity, distance, result, created_at: new Date().toISOString() });
+    });
+  },
+  removeLastAtBat(sessionId) {
+    this._updateSession(sessionId, s => s.at_bats.pop());
+  },
+
+  // Stats
+  getPitchingStats() {
+    const byDate = {};
+    for (const s of this._get('sessions')) {
+      if (!s.pitches.length) continue;
+      if (!byDate[s.date]) byDate[s.date] = [];
+      byDate[s.date].push(...s.pitches);
+    }
+    return Object.entries(byDate).sort(([a],[b]) => a.localeCompare(b)).map(([date, pitches]) => {
+      const speeds = pitches.filter(p => p.speed).map(p => p.speed);
+      return {
+        date,
+        total_pitches: pitches.length,
+        avg_speed: speeds.length ? Math.round(speeds.reduce((a,b)=>a+b,0)/speeds.length * 10)/10 : null,
+        max_speed: speeds.length ? Math.max(...speeds) : null,
+        strikes: pitches.filter(p => p.result === 'strike').length,
+        balls: pitches.filter(p => p.result === 'ball').length,
+        hits: pitches.filter(p => p.result === 'hit').length,
+      };
+    });
+  },
+  getBattingStats() {
+    const byDate = {};
+    for (const s of this._get('sessions')) {
+      if (!s.at_bats.length) continue;
+      if (!byDate[s.date]) byDate[s.date] = [];
+      byDate[s.date].push(...s.at_bats);
+    }
+    return Object.entries(byDate).sort(([a],[b]) => a.localeCompare(b)).map(([date, abs]) => {
+      const velos = abs.filter(a => a.exit_velocity).map(a => a.exit_velocity);
+      const dists = abs.filter(a => a.distance).map(a => a.distance);
+      return {
+        date,
+        total_at_bats: abs.length,
+        avg_exit_velo: velos.length ? Math.round(velos.reduce((a,b)=>a+b,0)/velos.length * 10)/10 : null,
+        max_exit_velo: velos.length ? Math.max(...velos) : null,
+        avg_distance: dists.length ? Math.round(dists.reduce((a,b)=>a+b,0)/dists.length * 10)/10 : null,
+        max_distance: dists.length ? Math.max(...dists) : null,
+        hits: abs.filter(a => a.result === 'hit').length,
+        outs: abs.filter(a => a.result === 'out').length,
+      };
+    });
+  }
+};
+
+// ============ STATE ============
+let currentSession = null;
+let lastAction = null;
+let chartInstances = {};
+
+// ============ NAVIGATION ============
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function navigate(id, btn) {
+  showScreen(id);
+  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  if (id === 'home') loadSessions();
+  if (id === 'stats') showStatsTab('pitching', document.querySelector('.tab'));
+}
+
+// ============ SESSIONS LIST ============
+function loadSessions() {
+  const sessions = DB.getSessions();
+  const el = document.getElementById('session-list');
+  if (!sessions.length) {
+    el.innerHTML = '<div class="empty-state"><div class="icon">&#9918;</div><p>No sessions yet.<br>Start your first one!</p></div>';
+    return;
+  }
+  el.innerHTML = sessions.map(s => `
+    <div class="session-item" onclick="viewSession(${s.id})">
+      <div class="info">
+        <span class="type-badge type-${s.type}">${s.type}</span>
+        ${s.label ? `<span style="color:var(--text);font-size:14px;margin-left:8px;">${esc(s.label)}</span>` : ''}
+        <div class="date">${formatDate(s.date)}</div>
+        <div class="counts">
+          ${s.pitches.length ? s.pitches.length + ' pitches' : ''}
+          ${s.pitches.length && s.at_bats.length ? ' &middot; ' : ''}
+          ${s.at_bats.length ? s.at_bats.length + ' at-bats' : ''}
+        </div>
+      </div>
+      <span class="arrow">&#8250;</span>
+    </div>
+  `).join('');
+}
+
+// ============ NEW SESSION ============
+let selectedType = null;
+
+function showNewSession() {
+  selectedType = null;
+  document.getElementById('session-label').value = '';
+  document.getElementById('session-date').value = new Date().toISOString().slice(0, 10);
+  document.querySelectorAll('.session-type-btn').forEach(b => {
+    b.style.background = 'transparent';
+    b.style.borderColor = 'var(--surface2)';
+    b.style.color = 'var(--text)';
+  });
+  document.getElementById('start-btn').disabled = true;
+  showScreen('new-session');
+}
+
+function selectType(type) {
+  selectedType = type;
+  document.querySelectorAll('.session-type-btn').forEach(b => {
+    if (b.dataset.type === type) {
+      b.style.background = 'var(--accent)';
+      b.style.borderColor = 'var(--accent)';
+      b.style.color = '#fff';
+    } else {
+      b.style.background = 'transparent';
+      b.style.borderColor = 'var(--surface2)';
+      b.style.color = 'var(--text)';
+    }
+  });
+  document.getElementById('start-btn').disabled = false;
+}
+
+function startSession() {
+  if (!selectedType) return;
+  const label = document.getElementById('session-label').value.trim();
+  const date = document.getElementById('session-date').value;
+  currentSession = DB.createSession(selectedType, label, date);
+  lastAction = null;
+
+  document.getElementById('live-title').textContent = currentSession.label || 'Session';
+  const badge = document.getElementById('live-type-badge');
+  badge.textContent = currentSession.type;
+  badge.className = `type-badge type-${currentSession.type}`;
+
+  const showPitch = currentSession.type === 'pitching' || currentSession.type === 'both';
+  const showBat = currentSession.type === 'batting' || currentSession.type === 'both';
+  document.getElementById('pitch-section').style.display = showPitch ? 'block' : 'none';
+  document.getElementById('bat-section').style.display = showBat ? 'block' : 'none';
+
+  updateLiveStats();
+  showScreen('live-session');
+  document.getElementById('undo-bar').classList.add('hidden');
+}
+
+// ============ LIVE LOGGING ============
+function setSpeed(val) {
+  document.getElementById('pitch-speed').value = val;
+}
+
+function logPitch(result) {
+  const speed = parseFloat(document.getElementById('pitch-speed').value) || null;
+  DB.addPitch(currentSession.id, speed, result);
+  currentSession = DB.getSession(currentSession.id);
+  lastAction = { type: 'pitch', desc: `${result}${speed ? ' @ ' + speed + ' mph' : ''}` };
+  document.getElementById('pitch-speed').value = '';
+  updateLiveStats();
+  showUndo();
+}
+
+function logAtBat(result) {
+  const exit_velocity = parseFloat(document.getElementById('exit-velo').value) || null;
+  const distance = parseFloat(document.getElementById('bat-distance').value) || null;
+  DB.addAtBat(currentSession.id, exit_velocity, distance, result);
+  currentSession = DB.getSession(currentSession.id);
+  lastAction = { type: 'at_bat', desc: `${result}${exit_velocity ? ' @ ' + exit_velocity + ' mph' : ''}` };
+  document.getElementById('exit-velo').value = '';
+  document.getElementById('bat-distance').value = '';
+  updateLiveStats();
+  showUndo();
+}
+
+function updateLiveStats() {
+  if (!currentSession) return;
+  const s = currentSession;
+
+  const ps = document.getElementById('pitch-live-stats');
+  if (ps && s.pitches) {
+    const total = s.pitches.length;
+    const strikes = s.pitches.filter(p => p.result === 'strike').length;
+    const balls = s.pitches.filter(p => p.result === 'ball').length;
+    const hits = s.pitches.filter(p => p.result === 'hit').length;
+    const speeds = s.pitches.filter(p => p.speed).map(p => p.speed);
+    const avg = speeds.length ? (speeds.reduce((a, b) => a + b, 0) / speeds.length).toFixed(1) : '--';
+    const max = speeds.length ? Math.max(...speeds) : '--';
+    ps.innerHTML = `
+      <div class="stat-box"><div class="value">${total}</div><div class="label">Pitches</div></div>
+      <div class="stat-box"><div class="value">${strikes}</div><div class="label">Strikes</div></div>
+      <div class="stat-box"><div class="value">${balls}</div><div class="label">Balls</div></div>
+      <div class="stat-box"><div class="value">${hits}</div><div class="label">Hits</div></div>
+      <div class="stat-box"><div class="value">${avg}</div><div class="label">Avg MPH</div></div>
+      <div class="stat-box"><div class="value">${max}</div><div class="label">Max MPH</div></div>
+    `;
+  }
+
+  const bs = document.getElementById('bat-live-stats');
+  if (bs && s.at_bats) {
+    const total = s.at_bats.length;
+    const hits = s.at_bats.filter(a => a.result === 'hit').length;
+    const outs = s.at_bats.filter(a => a.result === 'out').length;
+    const velos = s.at_bats.filter(a => a.exit_velocity).map(a => a.exit_velocity);
+    const dists = s.at_bats.filter(a => a.distance).map(a => a.distance);
+    const avgV = velos.length ? (velos.reduce((a, b) => a + b, 0) / velos.length).toFixed(1) : '--';
+    const maxV = velos.length ? Math.max(...velos) : '--';
+    const avgD = dists.length ? (dists.reduce((a, b) => a + b, 0) / dists.length).toFixed(0) : '--';
+    bs.innerHTML = `
+      <div class="stat-box"><div class="value">${total}</div><div class="label">At-Bats</div></div>
+      <div class="stat-box"><div class="value">${hits}</div><div class="label">Hits</div></div>
+      <div class="stat-box"><div class="value">${outs}</div><div class="label">Outs</div></div>
+      <div class="stat-box"><div class="value">${avgV}</div><div class="label">Avg Velo</div></div>
+      <div class="stat-box"><div class="value">${maxV}</div><div class="label">Max Velo</div></div>
+      <div class="stat-box"><div class="value">${avgD}${avgD !== '--' ? 'ft' : ''}</div><div class="label">Avg Dist</div></div>
+    `;
+  }
+}
+
+function showUndo() {
+  if (!lastAction) return;
+  const bar = document.getElementById('undo-bar');
+  document.getElementById('undo-text').textContent = `Logged: ${lastAction.desc}`;
+  bar.classList.remove('hidden');
+  clearTimeout(showUndo._timer);
+  showUndo._timer = setTimeout(() => bar.classList.add('hidden'), 5000);
+}
+
+function undoLast() {
+  if (!lastAction || !currentSession) return;
+  if (lastAction.type === 'pitch') {
+    DB.removeLastPitch(currentSession.id);
+  } else {
+    DB.removeLastAtBat(currentSession.id);
+  }
+  currentSession = DB.getSession(currentSession.id);
+  lastAction = null;
+  document.getElementById('undo-bar').classList.add('hidden');
+  updateLiveStats();
+}
+
+function endSession() {
+  currentSession = null;
+  showScreen('home');
+  loadSessions();
+  document.querySelectorAll('.nav button').forEach(b => b.classList.remove('active'));
+  document.querySelector('.nav button').classList.add('active');
+}
+
+// ============ SESSION DETAIL ============
+function viewSession(id) {
+  const s = DB.getSession(id);
+  if (!s) return;
+  document.getElementById('detail-title').innerHTML = `
+    <span class="type-badge type-${s.type}">${s.type}</span>
+    ${s.label ? ` ${esc(s.label)}` : ''} &mdash; ${formatDate(s.date)}
+  `;
+  let html = '';
+
+  if (s.pitches.length) {
+    const speeds = s.pitches.filter(p => p.speed).map(p => p.speed);
+    const strikes = s.pitches.filter(p => p.result === 'strike').length;
+    const balls = s.pitches.filter(p => p.result === 'ball').length;
+    const hits = s.pitches.filter(p => p.result === 'hit').length;
+    html += `
+      <div class="stat-card">
+        <h3 style="margin-bottom:8px;">Pitching Summary</h3>
+        <div class="row"><span class="lbl">Total Pitches</span><span class="val">${s.pitches.length}</span></div>
+        <div class="row"><span class="lbl">Strikes</span><span class="val">${strikes}</span></div>
+        <div class="row"><span class="lbl">Balls</span><span class="val">${balls}</span></div>
+        <div class="row"><span class="lbl">Hits Allowed</span><span class="val">${hits}</span></div>
+        ${speeds.length ? `
+          <div class="row"><span class="lbl">Avg Speed</span><span class="val">${(speeds.reduce((a,b)=>a+b,0)/speeds.length).toFixed(1)} mph</span></div>
+          <div class="row"><span class="lbl">Max Speed</span><span class="val">${Math.max(...speeds)} mph</span></div>
+        ` : ''}
+        <div class="row"><span class="lbl">Strike %</span><span class="val">${s.pitches.length ? ((strikes/s.pitches.length)*100).toFixed(0) + '%' : '--'}</span></div>
+      </div>
+    `;
+  }
+
+  if (s.at_bats.length) {
+    const velos = s.at_bats.filter(a => a.exit_velocity).map(a => a.exit_velocity);
+    const dists = s.at_bats.filter(a => a.distance).map(a => a.distance);
+    const hits = s.at_bats.filter(a => a.result === 'hit').length;
+    const outs = s.at_bats.filter(a => a.result === 'out').length;
+    html += `
+      <div class="stat-card">
+        <h3 style="margin-bottom:8px;">Batting Summary</h3>
+        <div class="row"><span class="lbl">Total At-Bats</span><span class="val">${s.at_bats.length}</span></div>
+        <div class="row"><span class="lbl">Hits</span><span class="val">${hits}</span></div>
+        <div class="row"><span class="lbl">Outs</span><span class="val">${outs}</span></div>
+        ${velos.length ? `
+          <div class="row"><span class="lbl">Avg Exit Velo</span><span class="val">${(velos.reduce((a,b)=>a+b,0)/velos.length).toFixed(1)} mph</span></div>
+          <div class="row"><span class="lbl">Max Exit Velo</span><span class="val">${Math.max(...velos)} mph</span></div>
+        ` : ''}
+        ${dists.length ? `
+          <div class="row"><span class="lbl">Avg Distance</span><span class="val">${(dists.reduce((a,b)=>a+b,0)/dists.length).toFixed(0)} ft</span></div>
+          <div class="row"><span class="lbl">Max Distance</span><span class="val">${Math.max(...dists)} ft</span></div>
+        ` : ''}
+        <div class="row"><span class="lbl">Batting Avg</span><span class="val">${s.at_bats.length ? (hits / s.at_bats.length).toFixed(3) : '--'}</span></div>
+      </div>
+    `;
+  }
+
+  html += `<button class="btn btn-danger btn-lg" style="margin-top:16px;" onclick="deleteSession(${s.id})">Delete Session</button>`;
+  document.getElementById('detail-content').innerHTML = html;
+  showScreen('session-detail');
+}
+
+function deleteSession(id) {
+  if (!confirm('Delete this session and all its data?')) return;
+  DB.deleteSession(id);
+  showScreen('home');
+  loadSessions();
+}
+
+// ============ STATS & CHARTS ============
+function showStatsTab(tab, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+
+  const container = document.getElementById('stats-content');
+  const data = tab === 'pitching' ? DB.getPitchingStats() : DB.getBattingStats();
+
+  if (!data.length) {
+    container.innerHTML = '<div class="empty-state"><div class="icon">&#128200;</div><p>No data yet.<br>Log some sessions first!</p></div>';
+    return;
+  }
+
+  if (tab === 'pitching') {
+    const latest = data[data.length - 1];
+    container.innerHTML = `
+      <div class="stat-card">
+        <h3 style="margin-bottom:8px;">Latest Session (${formatDate(latest.date)})</h3>
+        <div class="row"><span class="lbl">Pitches</span><span class="val">${latest.total_pitches}</span></div>
+        <div class="row"><span class="lbl">Avg Speed</span><span class="val">${latest.avg_speed || '--'} mph</span></div>
+        <div class="row"><span class="lbl">Max Speed</span><span class="val">${latest.max_speed || '--'} mph</span></div>
+        <div class="row"><span class="lbl">Strikes</span><span class="val">${latest.strikes}</span></div>
+        <div class="row"><span class="lbl">Balls</span><span class="val">${latest.balls}</span></div>
+        <div class="row"><span class="lbl">Strike %</span><span class="val">${((latest.strikes / latest.total_pitches) * 100).toFixed(0)}%</span></div>
+      </div>
+      <div class="chart-container"><h3>Avg Pitch Speed Over Time</h3><canvas id="chart-speed"></canvas></div>
+      <div class="chart-container"><h3>Strike % Over Time</h3><canvas id="chart-strikes"></canvas></div>
+      <div class="chart-container"><h3>Pitches Per Session</h3><canvas id="chart-pitch-count"></canvas></div>
+    `;
+    createChart('chart-speed', data.map(d => formatDate(d.date)), data.map(d => d.avg_speed), 'Avg Speed (mph)', '#4f8cff');
+    createChart('chart-strikes', data.map(d => formatDate(d.date)), data.map(d => ((d.strikes / d.total_pitches) * 100).toFixed(1)), 'Strike %', '#fbbf24');
+    createChart('chart-pitch-count', data.map(d => formatDate(d.date)), data.map(d => d.total_pitches), 'Pitches', '#34d399', 'bar');
+  } else {
+    const latest = data[data.length - 1];
+    container.innerHTML = `
+      <div class="stat-card">
+        <h3 style="margin-bottom:8px;">Latest Session (${formatDate(latest.date)})</h3>
+        <div class="row"><span class="lbl">At-Bats</span><span class="val">${latest.total_at_bats}</span></div>
+        <div class="row"><span class="lbl">Avg Exit Velo</span><span class="val">${latest.avg_exit_velo || '--'} mph</span></div>
+        <div class="row"><span class="lbl">Max Exit Velo</span><span class="val">${latest.max_exit_velo || '--'} mph</span></div>
+        <div class="row"><span class="lbl">Avg Distance</span><span class="val">${latest.avg_distance || '--'} ft</span></div>
+        <div class="row"><span class="lbl">Hits</span><span class="val">${latest.hits}</span></div>
+        <div class="row"><span class="lbl">Batting Avg</span><span class="val">${(latest.hits / latest.total_at_bats).toFixed(3)}</span></div>
+      </div>
+      <div class="chart-container"><h3>Avg Exit Velocity Over Time</h3><canvas id="chart-velo"></canvas></div>
+      <div class="chart-container"><h3>Avg Distance Over Time</h3><canvas id="chart-dist"></canvas></div>
+      <div class="chart-container"><h3>Batting Average Over Time</h3><canvas id="chart-bavg"></canvas></div>
+    `;
+    createChart('chart-velo', data.map(d => formatDate(d.date)), data.map(d => d.avg_exit_velo), 'Avg Exit Velo (mph)', '#4f8cff');
+    createChart('chart-dist', data.map(d => formatDate(d.date)), data.map(d => d.avg_distance), 'Avg Distance (ft)', '#34d399');
+    createChart('chart-bavg', data.map(d => formatDate(d.date)), data.map(d => (d.hits / d.total_at_bats).toFixed(3)), 'Batting Avg', '#ff6b4f');
+  }
+}
+
+function createChart(canvasId, labels, data, label, color, type = 'line') {
+  if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  chartInstances[canvasId] = new Chart(ctx, {
+    type,
+    data: {
+      labels,
+      datasets: [{
+        label,
+        data,
+        borderColor: color,
+        backgroundColor: type === 'bar' ? color + '99' : color + '22',
+        fill: type === 'line',
+        tension: 0.3,
+        borderWidth: 3,
+        pointRadius: 5,
+        pointBackgroundColor: color,
+      }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { color: '#9ca3af', maxRotation: 45 }, grid: { color: '#242836' } },
+        y: { ticks: { color: '#9ca3af' }, grid: { color: '#242836' }, beginAtZero: type === 'bar' }
+      }
+    }
+  });
+}
+
+// ============ SPEED CAM ============
+let camStream = null;
+let audioCtx = null;
+let audioAnalyser = null;
+let camActive = false;
+let camZones = JSON.parse(localStorage.getItem('camZones') || 'null');
+let camDrawing = false;
+let camDrawStep = 0;
+let camDrawStart = null;
+let camCalibrationData = JSON.parse(localStorage.getItem('camCalibration') || '[]');
+let camCalibrationOffset = parseFloat(localStorage.getItem('camCalibOffset') || '0');
+let camReleaseTime = null;
+let camLastSpeed = null;
+let camCooldown = false;
+let camPrevFrame = null;
+let camRafId = null;
+let camCalibrating = false;
+
+function openSpeedCam() {
+  if (!currentSession) return;
+  showScreen('speed-cam');
+  document.querySelector('.nav').style.display = 'none';
+  startCamera();
+}
+
+function exitSpeedCam() {
+  stopCamera();
+  document.querySelector('.nav').style.display = '';
+  showScreen('live-session');
+}
+
+async function startCamera() {
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', frameRate: { ideal: 60, min: 30 }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      audio: true
+    });
+    const video = document.getElementById('cam-video');
+    video.srcObject = camStream;
+    await video.play();
+
+    video.addEventListener('loadedmetadata', () => {
+      const overlay = document.getElementById('cam-zone-overlay');
+      const analysis = document.getElementById('cam-analysis');
+      overlay.width = video.videoWidth;
+      overlay.height = video.videoHeight;
+      analysis.width = video.videoWidth;
+      analysis.height = video.videoHeight;
+      drawZonesOnCanvas();
+    }, { once: true });
+
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    const audioSource = audioCtx.createMediaStreamSource(camStream);
+    const bandpass = audioCtx.createBiquadFilter();
+    bandpass.type = 'bandpass';
+    bandpass.frequency.value = 2500;
+    bandpass.Q.value = 1;
+    audioAnalyser = audioCtx.createAnalyser();
+    audioAnalyser.fftSize = 512;
+    audioAnalyser.smoothingTimeConstant = 0.1;
+    audioSource.connect(bandpass);
+    bandpass.connect(audioAnalyser);
+
+    camActive = true;
+    camPrevFrame = null;
+    updateCamStatus();
+    camDetectionLoop();
+  } catch (e) {
+    alert('Could not access camera/microphone. Make sure you allow permissions.');
+    exitSpeedCam();
+  }
+}
+
+function stopCamera() {
+  camActive = false;
+  if (camRafId) cancelAnimationFrame(camRafId);
+  camRafId = null;
+  if (camStream) { camStream.getTracks().forEach(t => t.stop()); camStream = null; }
+  if (audioCtx) { audioCtx.close(); audioCtx = null; }
+  camPrevFrame = null;
+}
+
+function toggleCamSettings() {
+  const settings = document.getElementById('cam-settings');
+  const bottom = document.getElementById('cam-bottom');
+  const viewport = document.querySelector('.cam-viewport');
+  if (settings.style.display === 'none') {
+    settings.style.display = 'block';
+    bottom.style.display = 'none';
+    viewport.style.display = 'none';
+    renderCalibrationList();
+  } else {
+    settings.style.display = 'none';
+    bottom.style.display = '';
+    viewport.style.display = '';
+    localStorage.setItem('camZones', JSON.stringify(camZones));
+  }
+}
+
+function startZoneDraw() {
+  camDrawing = true;
+  camDrawStep = 0;
+  camZones = null;
+  drawZonesOnCanvas();
+  toggleCamSettings();
+  updateCamStatus('Drag to draw PITCHER zone');
+  document.getElementById('cam-zone-overlay').style.pointerEvents = 'auto';
+}
+
+function clearZones() {
+  camZones = null;
+  localStorage.removeItem('camZones');
+  drawZonesOnCanvas();
+  updateCamStatus('Draw zones in Setup to start detecting');
+}
+
+(function() {
+  const overlay = document.getElementById('cam-zone-overlay');
+  function getPos(e) {
+    const rect = overlay.getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : e;
+    const scaleX = overlay.width / rect.width;
+    const scaleY = overlay.height / rect.height;
+    return { x: (touch.clientX - rect.left) * scaleX, y: (touch.clientY - rect.top) * scaleY };
+  }
+  overlay.addEventListener('touchstart', e => { if (!camDrawing) return; e.preventDefault(); camDrawStart = getPos(e); }, { passive: false });
+  overlay.addEventListener('mousedown', e => { if (!camDrawing) return; camDrawStart = getPos(e); });
+  overlay.addEventListener('touchmove', e => { if (!camDrawing || !camDrawStart) return; e.preventDefault(); drawZonesOnCanvas(camDrawStart, getPos(e)); }, { passive: false });
+  overlay.addEventListener('mousemove', e => { if (!camDrawing || !camDrawStart) return; drawZonesOnCanvas(camDrawStart, getPos(e)); });
+  function endDraw(e) {
+    if (!camDrawing || !camDrawStart) return;
+    const pos = e.changedTouches ? getPos({ touches: [e.changedTouches[0]] }) : getPos(e);
+    const zone = { x: Math.min(camDrawStart.x, pos.x), y: Math.min(camDrawStart.y, pos.y), w: Math.abs(pos.x - camDrawStart.x), h: Math.abs(pos.y - camDrawStart.y) };
+    if (zone.w < 20 || zone.h < 20) { camDrawStart = null; return; }
+    if (!camZones) camZones = {};
+    if (camDrawStep === 0) {
+      camZones.pitcher = zone;
+      camDrawStep = 1;
+      camDrawStart = null;
+      updateCamStatus('Now drag to draw CATCHER zone');
+      drawZonesOnCanvas();
+    } else {
+      camZones.catcher = zone;
+      camDrawing = false;
+      camDrawStep = 0;
+      camDrawStart = null;
+      overlay.style.pointerEvents = 'none';
+      localStorage.setItem('camZones', JSON.stringify(camZones));
+      drawZonesOnCanvas();
+      updateCamStatus('Ready — watching for pitches...');
+    }
+  }
+  overlay.addEventListener('touchend', endDraw);
+  overlay.addEventListener('mouseup', endDraw);
+})();
+
+function drawZonesOnCanvas(dragStart, dragEnd) {
+  const overlay = document.getElementById('cam-zone-overlay');
+  const ctx = overlay.getContext('2d');
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  if (camZones) {
+    if (camZones.pitcher) {
+      const z = camZones.pitcher;
+      ctx.strokeStyle = '#4f8cff'; ctx.lineWidth = 3; ctx.setLineDash([8, 4]);
+      ctx.strokeRect(z.x, z.y, z.w, z.h); ctx.setLineDash([]);
+      ctx.fillStyle = '#4f8cff'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillText('PITCHER', z.x + 4, z.y - 6);
+    }
+    if (camZones.catcher) {
+      const z = camZones.catcher;
+      ctx.strokeStyle = '#34d399'; ctx.lineWidth = 3; ctx.setLineDash([8, 4]);
+      ctx.strokeRect(z.x, z.y, z.w, z.h); ctx.setLineDash([]);
+      ctx.fillStyle = '#34d399'; ctx.font = 'bold 14px sans-serif';
+      ctx.fillText('CATCHER', z.x + 4, z.y - 6);
+    }
+  }
+  if (dragStart && dragEnd) {
+    ctx.strokeStyle = camDrawStep === 0 ? '#4f8cff' : '#34d399';
+    ctx.lineWidth = 3; ctx.setLineDash([]);
+    ctx.strokeRect(Math.min(dragStart.x, dragEnd.x), Math.min(dragStart.y, dragEnd.y), Math.abs(dragEnd.x - dragStart.x), Math.abs(dragEnd.y - dragStart.y));
+  }
+}
+
+function updateCamStatus(msg) {
+  const el = document.getElementById('cam-status');
+  if (msg) {
+    el.textContent = msg;
+    el.className = 'cam-status' + (msg.includes('watching') || msg.includes('Detected') ? ' detecting' : '');
+    return;
+  }
+  if (!camZones || !camZones.pitcher || !camZones.catcher) {
+    el.textContent = 'Draw zones in Setup to start detecting';
+    el.className = 'cam-status';
+  } else {
+    el.textContent = 'Ready — watching for pitches...';
+    el.className = 'cam-status detecting';
+  }
+}
+
+function camDetectionLoop() {
+  if (!camActive) return;
+  const video = document.getElementById('cam-video');
+  const analysisCanvas = document.getElementById('cam-analysis');
+  const ctx = analysisCanvas.getContext('2d', { willReadFrequently: true });
+
+  if (video.readyState >= 2 && camZones && camZones.pitcher && camZones.catcher && !camCooldown) {
+    ctx.drawImage(video, 0, 0);
+    if (!camReleaseTime) {
+      const motionScore = getMotionScore(ctx, camZones.pitcher);
+      const threshold = parseInt(document.getElementById('cam-motion-sens').value) || 30;
+      if (motionScore > threshold) {
+        camReleaseTime = performance.now();
+        updateCamStatus('Release detected! Listening for catch...');
+        document.getElementById('cam-speed-display').className = 'cam-speed-display waiting';
+        document.getElementById('cam-speed-val').textContent = '...';
+      }
+    }
+    if (camReleaseTime) {
+      const elapsed = performance.now() - camReleaseTime;
+      if (elapsed > 2000) {
+        camReleaseTime = null; camPrevFrame = null;
+        updateCamStatus('Timed out — no catch detected. Ready...');
+        camRafId = requestAnimationFrame(camDetectionLoop); return;
+      }
+      if (elapsed > 200) {
+        const audioPeak = getAudioPeak();
+        const audioThreshold = (parseInt(document.getElementById('cam-audio-sens').value) || 50) * 2.55;
+        if (audioPeak > audioThreshold) {
+          const flightTime = elapsed / 1000;
+          const distance = parseFloat(document.getElementById('cam-distance').value) || 60.5;
+          let speedMph = (distance / flightTime) * 0.6818;
+          speedMph += camCalibrationOffset;
+          camLastSpeed = Math.round(speedMph * 10) / 10;
+          document.getElementById('cam-speed-val').textContent = camLastSpeed.toFixed(1);
+          document.getElementById('cam-speed-display').className = 'cam-speed-display';
+          updateCamStatus(`Detected: ${camLastSpeed.toFixed(1)} mph (${(flightTime * 1000).toFixed(0)}ms flight)`);
+          if (camCalibrating) {
+            camCalibrationData.push({ computed: camLastSpeed, actual: null });
+            localStorage.setItem('camCalibration', JSON.stringify(camCalibrationData));
+          }
+          camReleaseTime = null; camCooldown = true; camPrevFrame = null;
+          setTimeout(() => { camCooldown = false; updateCamStatus(); }, 1500);
+        }
+      }
+    }
+    const pz = camZones.pitcher;
+    try { camPrevFrame = ctx.getImageData(pz.x, pz.y, pz.w, pz.h); } catch(e) { camPrevFrame = null; }
+  }
+  camRafId = requestAnimationFrame(camDetectionLoop);
+}
+
+function getMotionScore(ctx, zone) {
+  if (!camPrevFrame) return 0;
+  try {
+    const current = ctx.getImageData(zone.x, zone.y, zone.w, zone.h);
+    if (current.data.length !== camPrevFrame.data.length) return 0;
+    let diff = 0;
+    for (let i = 0; i < current.data.length; i += 16) {
+      const cLum = current.data[i] * 0.299 + current.data[i+1] * 0.587 + current.data[i+2] * 0.114;
+      const pLum = camPrevFrame.data[i] * 0.299 + camPrevFrame.data[i+1] * 0.587 + camPrevFrame.data[i+2] * 0.114;
+      diff += Math.abs(cLum - pLum);
+    }
+    return diff / Math.floor(current.data.length / 16);
+  } catch(e) { return 0; }
+}
+
+function getAudioPeak() {
+  if (!audioAnalyser) return 0;
+  const data = new Uint8Array(audioAnalyser.frequencyBinCount);
+  audioAnalyser.getByteTimeDomainData(data);
+  let peak = 0;
+  for (let i = 0; i < data.length; i++) {
+    const amp = Math.abs(data[i] - 128);
+    if (amp > peak) peak = amp;
+  }
+  return peak;
+}
+
+function logPitchFromCam(result) {
+  if (!currentSession) return;
+  if (camLastSpeed) document.getElementById('pitch-speed').value = camLastSpeed;
+  logPitch(result);
+  camLastSpeed = null;
+  document.getElementById('cam-speed-val').textContent = '--';
+  document.getElementById('cam-speed-display').className = 'cam-speed-display waiting';
+}
+
+function startCalibration() {
+  camCalibrating = true;
+  camCalibrationData = [];
+  localStorage.setItem('camCalibration', '[]');
+  document.getElementById('calibration-status').textContent = 'Calibrating... Throw pitches and enter radar speeds.';
+  renderCalibrationList();
+  toggleCamSettings();
+}
+
+function clearCalibration() {
+  camCalibrating = false;
+  camCalibrationData = [];
+  camCalibrationOffset = 0;
+  localStorage.removeItem('camCalibration');
+  localStorage.removeItem('camCalibOffset');
+  document.getElementById('calibration-status').textContent = 'Calibration cleared.';
+  renderCalibrationList();
+}
+
+function renderCalibrationList() {
+  const el = document.getElementById('calibration-list');
+  if (!camCalibrationData.length) {
+    el.innerHTML = '<p style="font-size:13px;color:var(--text2);">No calibration data yet.</p>';
+    return;
+  }
+  el.innerHTML = camCalibrationData.map((d, i) => `
+    <div class="calibration-entry">
+      <span class="computed">Computed: ${d.computed ? d.computed.toFixed(1) : '--'} mph</span>
+      <span style="color:var(--text2);">Radar:</span>
+      <input type="number" inputmode="decimal" value="${d.actual || ''}" placeholder="mph" onchange="updateCalibrationEntry(${i}, this.value)">
+      <span style="font-size:12px;color:var(--text2);">mph</span>
+    </div>
+  `).join('');
+}
+
+function updateCalibrationEntry(idx, val) {
+  const actual = parseFloat(val);
+  if (isNaN(actual)) return;
+  camCalibrationData[idx].actual = actual;
+  localStorage.setItem('camCalibration', JSON.stringify(camCalibrationData));
+  const pairs = camCalibrationData.filter(d => d.computed && d.actual);
+  if (pairs.length >= 1) {
+    camCalibrationOffset = pairs.reduce((sum, d) => sum + (d.actual - d.computed), 0) / pairs.length;
+    localStorage.setItem('camCalibOffset', camCalibrationOffset.toString());
+    document.getElementById('calibration-status').textContent =
+      `Offset: ${camCalibrationOffset >= 0 ? '+' : ''}${camCalibrationOffset.toFixed(1)} mph (from ${pairs.length} pitch${pairs.length > 1 ? 'es' : ''})`;
+  }
+}
+
+// ============ HELPERS ============
+function formatDate(d) {
+  if (!d) return '';
+  const [y, m, day] = d.split('-');
+  return `${parseInt(m)}/${parseInt(day)}/${y.slice(2)}`;
+}
+
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// Init
+loadSessions();
+</script>
+</body>
+</html>
